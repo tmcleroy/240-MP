@@ -145,11 +145,34 @@ FocusScope {
         return { urls: allSubUrls, track: subTrack }
     }
 
+    // Image subtitles (PGS/VOBSUB) have no text form, so they can only be burned
+    // into a transcode; text subtitles ride as switchable mpv sidecars instead.
+    function selectedSubIsImage() {
+        return imageSubtitleIds.indexOf(selectedSubtitleId) >= 0
+    }
+
+    // Subtitle id handed to Plex's transcode request: burn image subs (the only
+    // way to show them), but ask for a clean video for text subs ("0" = no burn)
+    // so they can be overlaid as live-switchable sidecars.
+    function transcodeBurnSubId() {
+        return selectedSubIsImage() ? selectedSubtitleId : "0"
+    }
+
+    // loadAndPlay subtitle args for a transcode: a burned image sub leaves no mpv
+    // track, while text subs become sidecars the OSC SUBTITLE button can cycle.
+    function transcodeSubArgs() {
+        if (selectedSubIsImage())
+            return { urls: [], track: -1 }
+        return buildSubArgs()
+    }
+
     function doStartPlayback(offsetMs) {
         if (isTranscoding) {
             // Transcode URL already encodes the offset from Item.qml; mpv starts at stream position 0.
             // Pass transcodeStartOffset so the OSC Lua script can display accurate wall-clock time.
-            mpvController.loadAndPlay(streamUrl, 0.0, 0, -1, [], false, -1, transcodeStartOffset / 1000.0, plexToken)
+            // Text subtitles ride as sidecars (switchable via the OSC button); image subs are burned in.
+            var sub = transcodeSubArgs()
+            mpvController.loadAndPlay(streamUrl, 0.0, 0, sub.track, sub.urls, false, -1, transcodeStartOffset / 1000.0, plexToken)
         } else {
             var sub = buildSubArgs()
             mpvController.loadAndPlay(streamUrl, offsetMs / 1000.0,
@@ -164,7 +187,7 @@ FocusScope {
             transcodeStartOffset = 0
             pendingZeroStart = true
             plexBackend.request_transcode(ratingKey, partKey, sessionId,
-                                          selectedAudioId, selectedSubtitleId, 0)
+                                          selectedAudioId, transcodeBurnSubId(), 0)
         } else {
             doStartPlayback(0)
         }
@@ -188,13 +211,13 @@ FocusScope {
                 pendingRetryTranscode = false
                 isTranscoding = true
                 transcodeStartOffset = viewOffset
-                var sub = buildSubArgs()
-                mpvController.loadAndPlay(url, 0.0, audioIdx + 1, sub.track, sub.urls, false, -1, transcodeStartOffset / 1000.0, plexToken)
+                var subRetry = transcodeSubArgs()
+                mpvController.loadAndPlay(url, 0.0, audioIdx + 1, subRetry.track, subRetry.urls, false, -1, transcodeStartOffset / 1000.0, plexToken)
                 return
             }
             if (!pendingZeroStart) return
             pendingZeroStart = false
-            var sub = buildSubArgs()
+            var sub = transcodeSubArgs()
             mpvController.loadAndPlay(url, 0.0, audioIdx + 1, sub.track, sub.urls, false, -1, 0.0, plexToken)
         }
     }
@@ -224,7 +247,7 @@ FocusScope {
                 // transparently with transcoding at the same resume offset.
                 pendingRetryTranscode = true
                 plexBackend.request_transcode(ratingKey, partKey, sessionId,
-                                              selectedAudioId, selectedSubtitleId,
+                                              selectedAudioId, transcodeBurnSubId(),
                                               viewOffset)
             } else {
                 goBack()

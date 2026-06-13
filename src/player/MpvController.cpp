@@ -175,6 +175,13 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
     if (transcodeOffsetSec > 0.5f)
         args << QString("--script-opts=transcode-offset=%1").arg(double(transcodeOffsetSec), 0, 'f', 3);
 
+    // A resumed Plex transcode rebases its HLS stream to 0, but sidecar subtitle
+    // files keep absolute timestamps. Shift the subs back by the offset so they
+    // stay in sync. Only relevant when external subs ride over a transcode —
+    // direct play passes transcodeOffsetSec == 0 and seeks the original file.
+    if (transcodeOffsetSec > 0.5f && !subFiles.isEmpty())
+        args << QString("--sub-delay=%1").arg(-double(transcodeOffsetSec), 0, 'f', 3);
+
     if (loop)
         args << QStringLiteral("--loop-playlist=inf");
     if (shuffle)

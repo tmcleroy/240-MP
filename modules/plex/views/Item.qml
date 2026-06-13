@@ -138,9 +138,11 @@ FocusScope {
             if (detail.forceTranscode) {
                 var audioId = detail.audioStreams && detail.audioStreams[audioIdx]
                     ? detail.audioStreams[audioIdx].id : ""
-                var subId = detail.subtitleStreams && detail.subtitleStreams[subtitleIdx]
-                    ? detail.subtitleStreams[subtitleIdx].id : "0"
-                plexBackend.request_transcode(detail.ratingKey, detail.partKey, sessionId, audioId, subId, detail.viewOffset || 0)
+                var subStream = detail.subtitleStreams && detail.subtitleStreams[subtitleIdx]
+                // Burn only image subs (PGS/VOBSUB); text subs are sent unburned
+                // ("0") so Player.qml can overlay them as switchable mpv sidecars.
+                var burnSubId = (subStream && subStream.imageSubtitle) ? subStream.id : "0"
+                plexBackend.request_transcode(detail.ratingKey, detail.partKey, sessionId, audioId, burnSubId, detail.viewOffset || 0)
             } else {
                 plexBackend.build_stream_url(detail.ratingKey, detail.partKey, sessionId)
             }
