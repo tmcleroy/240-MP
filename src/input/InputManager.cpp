@@ -488,6 +488,11 @@ bool InputManager::eventFilter(QObject *obj, QEvent *event) {
     // gamepad Back path, which posts Escape into QML — or sends ESC to mpv
     // over IPC when fullscreen mpv holds OS focus and the window can't take
     // key events. The bare Shift event is consumed; no view binds Key_Shift.
+    //
+    // Known gap: during fullscreen playback on macOS the keyboard goes to
+    // mpv, not us, and mpv can't bind a bare modifier — so right shift only
+    // works in the player on platforms where the app keeps the keyboard
+    // (RPi/EGLFS). Same asymmetry as gamepads, minus their SDL workaround.
     if (ke->key() == Qt::Key_Shift && isRightShift(ke)) {
         if (!ke->isAutoRepeat()) {
             if (type == QEvent::KeyPress)
