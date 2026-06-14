@@ -26,6 +26,7 @@ FocusScope {
     property string selectedSubtitleId: navParams.selectedSubtitleId || "0"
 
     property bool stoppedReported:    false
+    property bool playbackStarted:    false
     property bool overlayVisible:     false
     property int  choiceIndex:        0
     property string resumeSetting:    "ask"
@@ -203,7 +204,12 @@ FocusScope {
         target: mpvController
 
         function onPositionChanged(ms) {
-            if (ms > 0) playerRoot.lastKnownPositionMs = playerRoot.absPos(ms)
+            if (ms > 0) {
+                playerRoot.lastKnownPositionMs = playerRoot.absPos(ms)
+                // First position update means mpv is up and playing — drop the
+                // loading indicator (mpv's own window now covers the screen).
+                playerRoot.playbackStarted = true
+            }
         }
         function onDurationChanged(ms) {
             if (ms > 0) playerRoot.lastKnownDurationMs = ms
@@ -262,6 +268,18 @@ FocusScope {
     Rectangle {
         anchors.fill: parent
         color: "black"
+
+        // Shown while mpv launches and buffers the stream (before its window
+        // takes over). Hidden once the first position update arrives, or while
+        // the resume prompt is up.
+        Text {
+            text: "LOADING..."
+            color: root.tertiaryColor
+            font.family: root.globalFont
+            anchors.centerIn: parent
+            font.pixelSize: root.sh * 0.05 //24
+            visible: streamUrl !== "" && !overlayVisible && !playbackStarted
+        }
     }
 
     Rectangle {
