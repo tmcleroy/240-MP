@@ -57,7 +57,7 @@ FocusScope {
             } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                 overlayVisible = false
                 if (choiceIndex === 0) {
-                    doStartPlayback(viewOffset)
+                    beginPlayback(viewOffset)
                 } else {
                     startFromBeginning()
                 }
@@ -146,6 +146,24 @@ FocusScope {
         return { urls: allSubUrls, track: subTrack }
     }
 
+    // Starting mpv runs synchronously and, on the Pi, immediately switches VT
+    // (suspending Qt's render thread) before the LOADING frame can paint. Defer
+    // the launch one tick so the loading indicator is rendered first — mirroring
+    // the async transcode path, which already yields to the event loop. Without
+    // this, RESUME/direct-play show no loading screen on the Pi.
+    Timer {
+        id: startTimer
+        interval: 50
+        repeat: false
+        property int pendingOffset: 0
+        onTriggered: doStartPlayback(pendingOffset)
+    }
+
+    function beginPlayback(offsetMs) {
+        startTimer.pendingOffset = offsetMs
+        startTimer.restart()
+    }
+
     function doStartPlayback(offsetMs) {
         if (isTranscoding) {
             // Transcode URL already encodes the offset from Item.qml; mpv starts at stream position 0.
@@ -167,7 +185,7 @@ FocusScope {
             plexBackend.request_transcode(ratingKey, partKey, sessionId,
                                           selectedAudioId, selectedSubtitleId, 0)
         } else {
-            doStartPlayback(0)
+            beginPlayback(0)
         }
     }
 
@@ -261,7 +279,7 @@ FocusScope {
         if (resumeSetting === "ask" && viewOffset > 0) {
             overlayVisible = true
         } else {
-            doStartPlayback(viewOffset)
+            beginPlayback(viewOffset)
         }
     }
 
