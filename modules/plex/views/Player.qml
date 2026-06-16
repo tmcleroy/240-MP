@@ -292,7 +292,8 @@ FocusScope {
         // the resume prompt is up.
         Text {
             text: "LOADING..."
-            color: root.tertiaryColor
+            // White to match mpv's own overlay text color.
+            color: "white"
             font.family: root.globalFont
             anchors.centerIn: parent
             font.pixelSize: root.sh * 0.05 //24
