@@ -7,9 +7,34 @@ FocusScope {
     property var navParams: ({})
 
     signal navigateTo(string path, var params)
+    signal replaceWith(string path, var params)
     signal goBack()
 
     property var users: navParams.users || []
+
+    // True when there is exactly one user and we are signing in automatically,
+    // skipping the manual selection step entirely.
+    property bool autoSelecting: false
+
+    function selectUser(user) {
+        if (!user) return
+        if (navParams.reauth) {
+            plexBackend.reauth_select_user(user.id)
+        } else {
+            plexBackend.select_user(user.id)
+        }
+    }
+
+    // Advance to the next view. When auto-signing in the only user, replace
+    // rather than push so this screen stays out of the back stack — otherwise
+    // pressing back from the next screen would land here and re-trigger sign-in.
+    function goForward(path, params) {
+        if (autoSelecting) {
+            userSelectRoot.replaceWith(path, params)
+        } else {
+            userSelectRoot.navigateTo(path, params)
+        }
+    }
 
     Connections {
         target: plexBackend
@@ -20,13 +45,13 @@ FocusScope {
 
         function onServersLoaded(servers) {
             if (!navParams.reauth) {
-                userSelectRoot.navigateTo("ServerSelect.qml", { servers: servers })
+                userSelectRoot.goForward("ServerSelect.qml", { servers: servers })
             }
         }
 
         function onAuthSuccess() {
             if (navParams.reauth) {
-                userSelectRoot.navigateTo("Libraries.qml", {})
+                userSelectRoot.goForward("Libraries.qml", {})
             }
         }
 
@@ -39,6 +64,12 @@ FocusScope {
         // If users weren't passed via navParams, load from cache
         if (!navParams.users || navParams.users.length === 0) {
             plexBackend.load_users_from_cache()
+        }
+        // Only one user — skip the selection screen and sign in directly.
+        if (users.length === 1) {
+            userSelectRoot.autoSelecting = true
+            userSelectRoot.selectUser(users[0])
+            return
         }
         if (users.length > 0) userList.currentIndex = 0
     }
@@ -59,16 +90,27 @@ FocusScope {
     AppBar {
         iconSource: moduleRoot.moduleIcon
         title: moduleRoot.moduleName
-        subtitle: "Select User"
+        subtitle: userSelectRoot.autoSelecting ? "Signing In" : "Select User"
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.topMargin: root.sh * 0.125 //60
         anchors.leftMargin: root.sw * 0.125 //80
     }
 
+    // Loading indicator — shown while auto-signing in the only user
+    Text {
+        visible: userSelectRoot.autoSelecting
+        text: "SIGNING IN..."
+        color: root.tertiaryColor
+        font.family: root.globalFont
+        anchors.centerIn: parent
+        font.pixelSize: root.sh * 0.05 //24
+    }
+
     // Body
     ListView {
         id: userList
+        visible: !userSelectRoot.autoSelecting
         model: users
         anchors.top: parent.top
         anchors.left: parent.left
@@ -82,16 +124,7 @@ FocusScope {
         Keys.onUpPressed: if (currentIndex > 0) currentIndex--
         Keys.onDownPressed: if (currentIndex < count - 1) currentIndex++
 
-        Keys.onReturnPressed: {
-            var user = users[currentIndex]
-            if (user) {
-                if (navParams.reauth) {
-                    plexBackend.reauth_select_user(user.id)
-                } else {
-                    plexBackend.select_user(user.id)
-                }
-            }
-        }
+        Keys.onReturnPressed: userSelectRoot.selectUser(users[currentIndex])
 
         Keys.onPressed: function(event) {
             if (event.key === Qt.Key_Escape || event.key === Qt.Key_Backspace || event.key === Qt.Key_Back) {
@@ -137,6 +170,7 @@ FocusScope {
     // Footer
     Text {
         id: footer
+        visible: !userSelectRoot.autoSelecting
         text: root.hints.back + ":BACK " + root.hints.navigate + ":NAVIGATE " + root.hints.select + ":SELECT"
         color: root.tertiaryColor
         font.family: root.globalFont
