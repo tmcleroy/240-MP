@@ -528,7 +528,7 @@ void MpvController::appendVideoArgs(QStringList &args) const {
             if (smoothPlaybackEnabled())
                 args << "--vo=gpu" << "--gpu-context=drm" << "--hwdec=v4l2m2m";
             else
-                args << "--vo=drm" << "--hwdec=auto-safe";
+                args << "--vo=drm" << "--hwdec=v4l2m2m-copy";
         } else {
             // Pi 5 (Full KMS) and the safe fallback for unknown headless Linux.
             args << "--vo=drm" << "--hwdec=auto-safe";
