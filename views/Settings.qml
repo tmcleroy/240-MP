@@ -51,6 +51,21 @@ FocusScope {
             moduleId: ""
         })
 
+        // Smooth Playback — only shown on devices whose smooth decode path can't
+        // crop/zoom (the Pi 3 overlay path). Default ON; turning it off restores the
+        // crop-capable video output. Takes effect on the next video.
+        if (mpvController.hasSmoothPlaybackTradeoff()) {
+            items.push({
+                type: "list_single",
+                key: "smooth_playback",
+                label: "Smooth Playback",
+                options: ["On", "Off"],
+                value: appSettings["smooth_playback"] || "On",
+                description: "On: smoothest video, but the CROP button can't zoom. Off: enables cropping (uses more CPU). Applies to the next video.",
+                moduleId: ""
+            })
+        }
+
         // MODULES section — only show modules with has_settings
         var hasModuleSettings = false
         for (var i = 0; i < installedModules.length; i++) {
@@ -266,6 +281,22 @@ FocusScope {
                 }
             }
         }
+    }
+
+    // --- PER-ROW HELP TEXT --- (shown when the focused row carries a description)
+    Text {
+        id: rowHelp
+        property var currentRow: settingsRoot.settingsItems[settingsList.currentIndex]
+        text: (currentRow && currentRow.description) ? currentRow.description : ""
+        visible: text !== ""
+        color: root.secondaryColor
+        font.family: root.globalFont
+        font.pixelSize: root.sh * 0.0291667 //14
+        wrapMode: Text.WordWrap
+        anchors.top: settingsList.bottom
+        anchors.left: settingsList.left
+        anchors.topMargin: root.sh * 0.025 //12
+        width: settingsList.width
     }
 
     // --- FOOTER ---
