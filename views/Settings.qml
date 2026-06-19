@@ -58,10 +58,9 @@ FocusScope {
             items.push({
                 type: "list_single",
                 key: "smooth_playback",
-                label: "Smooth Playback",
+                label: "1080p Playback",
                 options: ["On", "Off"],
                 value: appSettings["smooth_playback"] || "On",
-                description: "On: smoothest video, but the CROP button can't zoom. Off: enables cropping (uses more CPU). Applies to the next video.",
                 moduleId: ""
             })
         }
@@ -73,7 +72,7 @@ FocusScope {
         }
 
         if (hasModuleSettings) {
-            items.push({ type: "section", label: "Modules:" })
+            items.push({ type: "section", label: "Modules" })
             for (var j = 0; j < installedModules.length; j++) {
                 var m = installedModules[j]
                 if (m.has_settings) {
@@ -83,7 +82,7 @@ FocusScope {
         }
 
         // SYSTEM section
-        items.push({ type: "section", label: "System:" })
+        items.push({ type: "section", label: "System" })
         items.push({ type: "quit", label: "Quit 240-MP" })
 
         settingsItems = items
@@ -281,22 +280,6 @@ FocusScope {
                 }
             }
         }
-    }
-
-    // --- PER-ROW HELP TEXT --- (shown when the focused row carries a description)
-    Text {
-        id: rowHelp
-        property var currentRow: settingsRoot.settingsItems[settingsList.currentIndex]
-        text: (currentRow && currentRow.description) ? currentRow.description : ""
-        visible: text !== ""
-        color: root.secondaryColor
-        font.family: root.globalFont
-        font.pixelSize: root.sh * 0.0291667 //14
-        wrapMode: Text.WordWrap
-        anchors.top: settingsList.bottom
-        anchors.left: settingsList.left
-        anchors.topMargin: root.sh * 0.025 //12
-        width: settingsList.width
     }
 
     // --- FOOTER ---
