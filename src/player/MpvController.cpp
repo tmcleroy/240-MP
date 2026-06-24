@@ -73,6 +73,7 @@ MpvController::MpvController(const QString &appRoot, AppCore *appCore, QObject *
         sendCommand({"observe_property", 1, "time-pos"});
         sendCommand({"observe_property", 2, "duration"});
         sendCommand({"observe_property", 3, "playlist-pos"});
+        sendCommand({"observe_property", 4, "panscan"});
     });
     connect(m_ipc, &QLocalSocket::readyRead, this, &MpvController::onIpcReadyRead);
 
@@ -106,7 +107,7 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
                                  const QStringList &subFiles, bool loop,
                                  int playlistStart, float transcodeOffsetSec,
                                  const QString &plexToken, bool muteAudio,
-                                 const QString &oscMode, bool shuffle) {
+                                 const QString &oscMode, bool shuffle, float crop) {
     if (m_process) {
         m_process->disconnect();
         if (m_process->state() != QProcess::NotRunning) {
@@ -123,6 +124,10 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
     m_duration    = 0;
     m_playlistPos = -1;
     m_lastEndFileReason.clear();
+    // Reflect the launch crop immediately; mpv re-reports it once it connects and
+    // observes "panscan". Without this the property keeps the prior session's value
+    // until the new mpv attaches, briefly mismatching reality.
+    if (m_crop != double(crop)) { m_crop = crop; emit cropChanged(m_crop); }
 
 #ifdef Q_OS_MACOS
     // .app bundles launched via double-click get a minimal PATH that excludes
@@ -196,6 +201,12 @@ void MpvController::loadAndPlay(const QString &url, float startSeconds,
 
     if (transcodeOffsetSec > 0.5f)
         args << QString("--script-opts=transcode-offset=%1").arg(double(transcodeOffsetSec), 0, 'f', 3);
+
+    // Carry the OSC crop (panscan) across a fresh launch — e.g. Plex autoplay-next,
+    // which spawns a new mpv per episode. mpv's default panscan is 0, so only pass
+    // it when cropped to keep the arg list clean.
+    if (crop > 0.001f)
+        args << QString("--panscan=%1").arg(double(crop), 0, 'f', 3);
 
     if (loop)
         args << QStringLiteral("--loop-playlist=inf");
@@ -378,6 +389,8 @@ void MpvController::onIpcReadyRead() {
         } else if (name == "playlist-pos") {
             m_playlistPos = int(val);
             emit playlistPosChanged(m_playlistPos);
+        } else if (name == "panscan") {
+            if (m_crop != val) { m_crop = val; emit cropChanged(m_crop); }
         }
     }
 }

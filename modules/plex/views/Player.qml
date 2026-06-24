@@ -44,6 +44,10 @@ FocusScope {
 
     property int lastKnownPositionMs: 0
     property int lastKnownDurationMs: 0
+    // Live mpv crop (panscan, 0..1) set via the OSC CROP button. Tracked so it can
+    // be carried into the next episode — autoplay-next spawns a fresh mpv per episode,
+    // which would otherwise reset the crop the viewer chose.
+    property real lastKnownCrop: 0
 
     focus: true
 
@@ -195,16 +199,21 @@ FocusScope {
         startTimer.restart()
     }
 
-    function doStartPlayback(offsetMs) {
+    // crop (panscan 0..1) launches mpv pre-cropped — used to carry the OSC CROP
+    // selection into an autoplay-advanced episode. Defaults to 0 (no crop).
+    function doStartPlayback(offsetMs, crop) {
+        crop = crop || 0
         if (isTranscoding) {
             // Transcode covers the full timeline (requested at offset 0), so seek mpv
             // to the resume point. This keeps everything before offsetMs seekable, so
             // the user can rewind past the resume point.
-            mpvController.loadAndPlay(streamUrl, offsetMs / 1000.0, 0, -1, [], false, -1, 0.0, plexToken)
+            mpvController.loadAndPlay(streamUrl, offsetMs / 1000.0, 0, -1, [], false, -1, 0.0, plexToken,
+                                       false, "", false, crop)
         } else {
             var sub = buildSubArgs()
             mpvController.loadAndPlay(streamUrl, offsetMs / 1000.0,
-                                       audioIdx + 1, sub.track, sub.urls, false, -1, 0.0, plexToken)
+                                       audioIdx + 1, sub.track, sub.urls, false, -1, 0.0, plexToken,
+                                       false, "", false, crop)
         }
     }
 
@@ -229,11 +238,13 @@ FocusScope {
         function onErrorOccurred(msg) { console.log("[Player] Backend error: " + msg) }
         function onStreamUrlReady(url, plexToken) {
             if (pendingNextEpisode) {
-                // Stream URL for the auto-advanced next episode just arrived.
+                // Stream URL for the auto-advanced next episode just arrived. Carry
+                // the crop from the episode we just finished so the viewer's CROP
+                // choice survives the fresh mpv launch.
                 pendingNextEpisode = false
                 playerRoot.streamUrl = url
                 playerRoot.plexToken = plexToken
-                doStartPlayback(0)
+                doStartPlayback(0, lastKnownCrop)
                 return
             }
             if (pendingRetryTranscode) {
@@ -338,6 +349,9 @@ FocusScope {
         }
         function onDurationChanged(ms) {
             if (ms > 0) playerRoot.lastKnownDurationMs = ms
+        }
+        function onCropChanged(value) {
+            playerRoot.lastKnownCrop = value
         }
 
         function onPlaybackEnded(finalPositionMs, finalDurationMs, reason) {

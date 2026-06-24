@@ -28,6 +28,9 @@ class MpvController : public QObject {
     Q_PROPERTY(int position    READ position    NOTIFY positionChanged)
     Q_PROPERTY(int duration    READ duration    NOTIFY durationChanged)
     Q_PROPERTY(int playlistPos READ playlistPos NOTIFY playlistPosChanged)
+    // Live mpv "panscan" value (0..1) — the OSC CROP button toggles it 0↔1. Exposed
+    // so a module can carry the crop across a fresh mpv launch (Plex autoplay-next).
+    Q_PROPERTY(double crop     READ crop        NOTIFY cropChanged)
 
 public:
     explicit MpvController(const QString &appRoot, AppCore *appCore = nullptr,
@@ -37,6 +40,7 @@ public:
     int position()    const { return m_position;    }
     int duration()    const { return m_duration;    }
     int playlistPos() const { return m_playlistPos; }
+    double crop()     const { return m_crop;        }
 
     Q_INVOKABLE void loadAndPlay(const QString &url, float startSeconds,
                                   int audioTrack, int subTrack,
@@ -47,7 +51,8 @@ public:
                                   const QString &plexToken = {},
                                   bool muteAudio = false,
                                   const QString &oscMode = {},
-                                  bool shuffle = false);
+                                  bool shuffle = false,
+                                  float crop = 0.0f);
     Q_INVOKABLE void stop();
     Q_INVOKABLE void seekTo(int positionMs);
     Q_INVOKABLE void sendKey(const QString &key);
@@ -61,6 +66,7 @@ signals:
     void positionChanged(int ms);
     void durationChanged(int ms);
     void playlistPosChanged(int pos);
+    void cropChanged(double value);
     // Emitted exactly once when mpv exits, with the reason it ended:
     //   "eof"     — file played to its natural end. (What a module does with this
     //               is its own concern.  as an example: Plex may autoplay the next episode)
@@ -116,6 +122,7 @@ private:
     int           m_position     = 0;
     int           m_duration     = 0;
     int           m_playlistPos  = -1;
+    double        m_crop         = 0.0;
     bool          m_headlessMode = false;
     int           m_previousVt   = -1;
     int           m_qtDrmFd      = -1;
