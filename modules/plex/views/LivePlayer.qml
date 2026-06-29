@@ -48,6 +48,10 @@ FocusScope {
         mpvController.stop()
     }
 
+    // Forward keys to mpv (the same set Player.qml forwards) so its OSC works on
+    // the Pi, where the Qt app owns the keyboard and relays via sendKey. On desktop
+    // mpv has focus and handles these directly. Up/Down drive the OSC here, not
+    // channel changes — to switch channels the user exits back to the channel list.
     Keys.onPressed: function(event) {
         if (event.key === Qt.Key_Escape || event.key === Qt.Key_Back) {
             // Quit mpv; onPlaybackEnded drives the teardown + goBack.
@@ -55,6 +59,18 @@ FocusScope {
             event.accepted = true
         } else if (event.key === Qt.Key_Backspace) {
             mpvController.sendKey("BS")
+            event.accepted = true
+        } else if (event.key === Qt.Key_Up) {
+            mpvController.sendKey("UP")
+            event.accepted = true
+        } else if (event.key === Qt.Key_Down) {
+            mpvController.sendKey("DOWN")
+            event.accepted = true
+        } else if (event.key === Qt.Key_Left) {
+            mpvController.sendKey("LEFT")
+            event.accepted = true
+        } else if (event.key === Qt.Key_Right) {
+            mpvController.sendKey("RIGHT")
             event.accepted = true
         } else if (event.key === Qt.Key_Space) {
             mpvController.sendKey("SPACE")
