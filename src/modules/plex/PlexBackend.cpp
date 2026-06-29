@@ -2024,15 +2024,16 @@ void PlexBackend::tune_channel(const QString &channelId, const QString &sessionI
 
         // The grab operation's Metadata (a single object, not an array) carries the
         // playable live-session key, e.g. "/livetv/sessions/{uuid}". That's the path
-        // we hand to the universal transcoder and report the timeline against. A
-        // failed tune (busy tuner / no signal) returns size 0 with a "message".
-        QString livePath;
+        // we hand to the universal transcoder and report the timeline against, plus
+        // the airing's ratingKey/duration that the keep-alive needs. A failed tune
+        // (busy tuner / no signal) returns size 0 with a "message".
+        QJsonObject meta;
         QJsonArray subs = mc["MediaSubscription"].toArray();
         if (!subs.isEmpty()) {
             QJsonArray ops = subs[0].toObject()["MediaGrabOperation"].toArray();
-            if (!ops.isEmpty())
-                livePath = ops[0].toObject()["Metadata"].toObject()["key"].toString();
+            if (!ops.isEmpty()) meta = ops[0].toObject()["Metadata"].toObject();
         }
+        QString livePath = meta["key"].toString();
         if (livePath.isEmpty()) {
             QString msg = mc["message"].toString();
             qDebug() << "[Plex] Tune produced no stream — raw:" << body.left(600);
@@ -2040,6 +2041,10 @@ void PlexBackend::tune_channel(const QString &channelId, const QString &sessionI
             return;
         }
         m_liveTimelineKey = livePath;
+        m_liveRatingKey   = meta["ratingKey"].toVariant().toString();
+        m_liveDurationMs  = meta["duration"].toInt();
+        m_liveSessionId   = sessionId;
+        m_liveStartedMs   = QDateTime::currentMSecsSinceEpoch();
 
         // Start the HLS transcode against the tuned path. Reuses the universal
         // transcoder + master-m3u8 parse from request_transcode.
@@ -2096,13 +2101,22 @@ void PlexBackend::tune_channel(const QString &channelId, const QString &sessionI
 void PlexBackend::update_live_timeline(const QString &state) {
     if (m_liveTimelineKey.isEmpty()) return;
     QString uri = serverUrl(), token = serverToken();
+    // The ratingKey + session + an advancing time are what let Plex match this
+    // timeline to the active airing and keep the DVR grab rolling. Without them the
+    // grab is reaped after a few minutes and the HLS playlist starts returning 404.
+    qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - m_liveStartedMs;
+    if (elapsed < 0) elapsed = 0;
+    if (m_liveDurationMs > 0 && elapsed > m_liveDurationMs) elapsed = m_liveDurationMs;
     QUrl url(uri + "/:/timeline");
     QUrlQuery q;
-    q.addQueryItem("key",      m_liveTimelineKey);
-    q.addQueryItem("state",    state);
-    q.addQueryItem("time",     "0");
-    q.addQueryItem("duration", "0");
-    q.addQueryItem("X-Plex-Client-Identifier", clientId());
+    q.addQueryItem("ratingKey", m_liveRatingKey);
+    q.addQueryItem("key",       m_liveTimelineKey);
+    q.addQueryItem("state",     state);
+    q.addQueryItem("time",      QString::number(elapsed));
+    q.addQueryItem("duration",  QString::number(m_liveDurationMs));
+    q.addQueryItem("hasMDE",    "1");
+    q.addQueryItem("X-Plex-Session-Identifier", m_liveSessionId);
+    q.addQueryItem("X-Plex-Client-Identifier",  clientId());
     url.setQuery(q);
     auto *reply = plexGet(url, token);
     connect(reply, &QNetworkReply::finished, reply, &QNetworkReply::deleteLater);

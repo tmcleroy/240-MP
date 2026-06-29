@@ -113,12 +113,15 @@ FocusScope {
         }
     }
 
-    // Keep-alive: a live tuner is released if the client stops pinging the timeline.
+    // Keep-alive: Plex reaps the DVR grab (and then 404s the stream) if the client
+    // stops reporting the timeline. Ping from the moment we're tuned — not gated on
+    // playbackStarted — since the grab is rolling before mpv reports its first frame.
+    // update_live_timeline no-ops until a channel is tuned.
     Timer {
-        interval: 10000
+        interval: 8000
         repeat:   true
         running:  true
-        onTriggered: if (playbackStarted) plexBackend.update_live_timeline("playing")
+        onTriggered: plexBackend.update_live_timeline("playing")
     }
 
     Component.onCompleted: tune()

@@ -208,9 +208,17 @@ private:
     bool    m_refreshInFlight  = false;
     bool    m_deviceVerified   = false; // set after first successful plex.tv check per session
 
-    // Live TV session state. m_liveDvrId is cached from the last load_live_channels;
-    // m_liveTimelineKey is the grabbed media part key from the last tune_channel,
-    // used as the /:/timeline key for keep-alive (live has no rating key).
+    // Live TV session state. m_liveDvrId is cached from the last load_live_channels.
+    // The rest are set by tune_channel and drive the timeline keep-alive that stops
+    // Plex from reaping the DVR grab (which would 404 the stream after a few
+    // minutes): m_liveTimelineKey is the grabbed live-session key, m_liveRatingKey
+    // and m_liveDurationMs identify the airing, m_liveSessionId ties the timeline to
+    // the transcode session, and m_liveStartedMs gives the keep-alive an advancing
+    // playback time.
     QString m_liveDvrId;
     QString m_liveTimelineKey;
+    QString m_liveRatingKey;
+    QString m_liveSessionId;
+    int     m_liveDurationMs = 0;
+    qint64  m_liveStartedMs  = 0;
 };
