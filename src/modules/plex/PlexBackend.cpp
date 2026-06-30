@@ -1966,25 +1966,48 @@ void PlexBackend::load_live_channels() {
             return;
         }
 
-        // Resolve channel names/numbers from the EPG lineup.
-        QUrl chUrl(uri + "/livetv/epg/lineupchannels");
-        QUrlQuery cq; cq.addQueryItem("lineup", lineup); chUrl.setQuery(cq);
-        auto *chReply = plexGet(chUrl, token);
-        connect(chReply, &QNetworkReply::finished, this, [this, chReply]() {
-            chReply->deleteLater();
-            if (chReply->error() != QNetworkReply::NoError) {
-                emit errorOccurred("LOAD CHANNELS FAILED: " + chReply->errorString()); return;
+        // Resolve channel names/numbers via the EPG media provider's proxied
+        // "lineups/dvr/channels" route — the same one Plex Web uses. PMS forbids
+        // managed/restricted Home users from the raw /livetv/epg/* endpoints (403),
+        // but routes everyone through this provider-proxy path uniformly, so it
+        // works regardless of account type.
+        auto *provReply = plexGet(QUrl(uri + "/media/providers"), token);
+        connect(provReply, &QNetworkReply::finished, this, [this, uri, token, provReply]() {
+            provReply->deleteLater();
+            if (provReply->error() != QNetworkReply::NoError) {
+                emit errorOccurred("LOAD PROVIDERS FAILED: " + provReply->errorString()); return;
             }
-            QByteArray body = chReply->readAll();
-            QJsonObject cmc = QJsonDocument::fromJson(body)
-                              .object()["MediaContainer"].toObject();
-            QVariantList channels;
-            for (const auto &lv : cmc["Lineup"].toArray()) {
-                for (const auto &cv : lv.toObject()["Channel"].toArray()) {
+            QJsonArray providers = QJsonDocument::fromJson(provReply->readAll())
+                                    .object()["MediaContainer"].toObject()["MediaProvider"].toArray();
+            QString providerId;
+            for (const auto &pv : providers) {
+                QJsonObject p = pv.toObject();
+                if (p["protocols"].toString().contains("livetv")) {
+                    providerId = p["identifier"].toString();
+                    break;
+                }
+            }
+            if (providerId.isEmpty()) {
+                qDebug() << "[Plex] No livetv media provider in /media/providers";
+                emit liveChannelsLoaded(QVariantList{});
+                return;
+            }
+
+            auto *chReply = plexGet(QUrl(uri + "/" + providerId + "/lineups/dvr/channels"), token);
+            connect(chReply, &QNetworkReply::finished, this, [this, chReply]() {
+                chReply->deleteLater();
+                if (chReply->error() != QNetworkReply::NoError) {
+                    emit errorOccurred("LOAD CHANNELS FAILED: " + chReply->errorString()); return;
+                }
+                QByteArray body = chReply->readAll();
+                QJsonObject cmc = QJsonDocument::fromJson(body)
+                                  .object()["MediaContainer"].toObject();
+                QVariantList channels;
+                for (const auto &cv : cmc["Channel"].toArray()) {
                     QJsonObject c = cv.toObject();
-                    QString id    = c["key"].toString();
+                    QString id    = c["id"].toString();
                     if (id.isEmpty()) continue;
-                    QString number = c["channelVcn"].toString();
+                    QString number = c["vcn"].toString();
                     QString name   = c["title"].toString(c["callSign"].toString());
                     channels.append(QVariantMap{
                         {"channelId", id},
@@ -1992,10 +2015,10 @@ void PlexBackend::load_live_channels() {
                         {"title",     name.toUpper()},
                     });
                 }
-            }
-            if (channels.isEmpty())
-                qDebug() << "[Plex] Live lineup parsed empty — raw:" << body.left(800);
-            emit liveChannelsLoaded(channels);
+                if (channels.isEmpty())
+                    qDebug() << "[Plex] Live lineup parsed empty — raw:" << body.left(800);
+                emit liveChannelsLoaded(channels);
+            });
         });
     });
 }

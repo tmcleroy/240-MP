@@ -15,6 +15,7 @@ FocusScope {
     property string libraryName: navParams.libraryName || "LIVE TV"
     property var channels: []
     property bool loaded: false
+    property string errorMessage: ""
 
     Connections {
         target: plexBackend
@@ -31,6 +32,8 @@ FocusScope {
 
         function onErrorOccurred(msg) {
             console.log("[LiveChannels] Error: " + msg)
+            channelsRoot.loaded = true
+            channelsRoot.errorMessage = msg
         }
     }
 
@@ -53,13 +56,17 @@ FocusScope {
         anchors.leftMargin: root.sw * 0.125 //80
     }
 
-    // Loading / empty indicator
+    // Loading / empty / error indicator
     Text {
         visible: channels.length === 0
-        text: channelsRoot.loaded ? "NO CHANNELS" : "LOADING..."
+        text: channelsRoot.errorMessage !== "" ? channelsRoot.errorMessage
+              : (channelsRoot.loaded ? "NO CHANNELS" : "LOADING...")
         color: root.tertiaryColor
         font.family: root.globalFont
         anchors.centerIn: parent
+        wrapMode: Text.WordWrap
+        horizontalAlignment: Text.AlignHCenter
+        width: root.sw * 0.6
         font.pixelSize: root.sh * 0.05 //24
     }
 
